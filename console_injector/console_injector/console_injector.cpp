@@ -2,42 +2,44 @@
 //
 
 #include <iostream>
-#include <windows.h>
+#include <fstream>
+#include <tlhelp32.h>
 #include <vector>
+#include <windows.h>
 
 // Check windows
 #if _WIN32 || _WIN64
 #if _WIN64
-#define ENVIRONMENT64
+	#define ENVIRONMENT64
 #else
-#define ENVIRONMENT32
+	#define ENVIRONMENT32
 #endif
 #endif
 
 // Check GCC
 #if __GNUC__
 #if __x86_64__ || __ppc64__
-#define ENVIRONMENT64
+	#define ENVIRONMENT64
 #else
-#define ENVIRONMENT32
+	#define ENVIRONMENT32
 #endif
 #endif
 
 #ifdef ENVIRONMENT64
-const char* dllName = "spy_hook_lib_x64.dll";
+	const char* dllName = "spy_hook_lib_x64.dll";
 #else
-const char* dllName = "spy_hook_lib_x86.dll";
+	const char* dllName = "spy_hook_lib_x86.dll";
 #endif
 
 bool acquireDebugPrivileges()
 {
 	bool success = false;
-
 	HANDLE hToken;
-	TOKEN_PRIVILEGES tokenPriv;
-	LUID luidDebug;
+	
 	if (OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES, &hToken))
 	{
+		LUID luidDebug;
+		TOKEN_PRIVILEGES tokenPriv;
 		if (LookupPrivilegeValue(L"", SE_DEBUG_NAME, &luidDebug))
 		{
 			tokenPriv.PrivilegeCount = 1;
@@ -46,7 +48,7 @@ bool acquireDebugPrivileges()
 
 			if (AdjustTokenPrivileges(hToken, FALSE, &tokenPriv, sizeof(tokenPriv), NULL, NULL) == 0)
 			{
-				// error msg
+				std::cout << "can't adjust privileges" << std::endl;
 			}
 			else
 			{
@@ -55,8 +57,10 @@ bool acquireDebugPrivileges()
 		}
 		else
 		{
-			std::cout << "can't lookup " << std::endl;
+			std::cout << "can't lookup privilege value" << std::endl;
 		}
+
+		CloseHandle(hToken);
 	}
 	else
 	{
@@ -66,8 +70,7 @@ bool acquireDebugPrivileges()
 	return success;
 }
 
-#include <fstream>
-#include <tlhelp32.h>
+
 
 void printUsage()
 {
