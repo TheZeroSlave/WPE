@@ -6,7 +6,10 @@ Allows to capture traffic, edit and send back to server.
 Tested on windows 7 / 8.1 / 10.
 
 you can download it here:
-http://nullblock.tilda.ws/
+~~http://nullblock.tilda.ws/~~
+
+in releases section
+https://github.com/TheZeroSlave/WPE/releases/
 
 ## How to use it
 
