@@ -26,7 +26,9 @@
 
 #ifdef ENVIRONMENT64
 const char* dllName = "spy_hook_lib_x64.dll";
+const unsigned long LoadLibraryAddr = 0x7FFA8E7A4B20;
 #else
+const unsigned long LoadLibraryAddr = 0x76FE8410;
 const char* dllName = "spy_hook_lib_x86.dll";
 #endif
 
@@ -98,7 +100,7 @@ using LoadFunc = decltype(LoadLibraryA);
 DWORD WINAPI RemoteFunc(LPVOID lpThreadParameter)
 {
 	char* str = (char*)lpThreadParameter;
-	auto loadFunc = (LoadFunc*)0x7FFA8E7A4B20; //loadlibrary
+	auto loadFunc = (LoadFunc*)LoadLibraryAddr; //loadlibrary
 
 	auto handle = loadFunc(str);
 	if (handle == NULL)
@@ -113,10 +115,10 @@ int main(int argc, char* argv[])
 {
 	auto virusSize = (char*)main - (char*)RemoteFunc;
 
-	//auto LoadLibraryAddr = (LPVOID)GetProcAddress(GetModuleHandle(L"kernel32.dll"),
-	//	"LoadLibraryA");
+	auto LoadLibraryAddr = (LPVOID)GetProcAddress(GetModuleHandle(L"kernel32.dll"),
+		"LoadLibraryA");
 
-	//std::cout << "addr of lib: " << LoadLibraryAddr << " sz:" << virusSize << std::endl;
+	std::cout << "addr of lib: " << LoadLibraryAddr << " sz:" << virusSize << std::endl;
 
 	if (argc < 3)
 	{
@@ -212,7 +214,7 @@ int main(int argc, char* argv[])
 	if (exitCode != 0)
 	{
 		const auto& exitCodeStr = std::to_string(exitCode);
-		MessageBoxA(0, exitCodeStr.c_str(), "", 0);
+		MessageBoxA(0, exitCodeStr.c_str(), "After calling", 0);
 		return -10;
 	}
 	CloseHandle(hProcess);
