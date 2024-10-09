@@ -26,9 +26,9 @@
 
 #ifdef ENVIRONMENT64
 const char* dllName = "spy_hook_lib_x64.dll";
-const unsigned long LoadLibraryAddr = 0x7FFA8E7A4B20;
+const unsigned long long LoadLibraryAddr = 0x7FFA8E7A4B20;
 #else
-const unsigned long LoadLibraryAddr = 0x76FE8410;
+const unsigned long long LoadLibraryAddr = 0x76FE8410;
 const char* dllName = "spy_hook_lib_x86.dll";
 #endif
 
@@ -40,7 +40,7 @@ bool acquireDebugPrivileges()
 	bool success = false;
 
 	HANDLE hToken = NULL;
-	
+
 	if (OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES, &hToken))
 	{
 		LUID luidDebug;
@@ -189,7 +189,7 @@ int main(int argc, char* argv[])
 
 	SIZE_T written = 0;
 	WriteProcessMemory(hProcess, LLParam, RemoteFunc, virusSize, &written);
-	WriteProcessMemory(hProcess, ((char*)LLParam)+virusSize, dllPath.c_str(), dllPath.size(), &written);
+	WriteProcessMemory(hProcess, ((char*)LLParam) + virusSize, dllPath.c_str(), dllPath.size(), &written);
 
 	if (written == 0)
 	{
@@ -211,7 +211,7 @@ int main(int argc, char* argv[])
 		return -11;
 	}
 	// if everything is ok, code will be different from 0
-	if (exitCode != 0)
+	if (exitCode != 0 && exitCode != STILL_ACTIVE)
 	{
 		const auto& exitCodeStr = std::to_string(exitCode);
 		MessageBoxA(0, exitCodeStr.c_str(), "After calling", 0);
