@@ -2,7 +2,6 @@
 //
 
 #include <iostream>
-#include <string>
 #include <windows.h>
 #include <vector>
 
@@ -26,25 +25,19 @@
 
 #ifdef ENVIRONMENT64
 const char* dllName = "spy_hook_lib_x64.dll";
-const unsigned long long LoadLibraryAddr = 0x7FFA8E7A4B20;
 #else
-const unsigned long long LoadLibraryAddr = 0x76FE8410;
 const char* dllName = "spy_hook_lib_x86.dll";
 #endif
-
-#include <winternl.h>
-
 
 bool acquireDebugPrivileges()
 {
 	bool success = false;
 
-	HANDLE hToken = NULL;
-
+	HANDLE hToken;
+	TOKEN_PRIVILEGES tokenPriv;
+	LUID luidDebug;
 	if (OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES, &hToken))
 	{
-		LUID luidDebug;
-		TOKEN_PRIVILEGES tokenPriv;
 		if (LookupPrivilegeValue(L"", SE_DEBUG_NAME, &luidDebug))
 		{
 			tokenPriv.PrivilegeCount = 1;
@@ -54,7 +47,6 @@ bool acquireDebugPrivileges()
 			if (AdjustTokenPrivileges(hToken, FALSE, &tokenPriv, sizeof(tokenPriv), NULL, NULL) == 0)
 			{
 				// error msg
-				std::cout << "can't lookup privilege value" << std::endl;
 			}
 			else
 			{
@@ -71,11 +63,11 @@ bool acquireDebugPrivileges()
 		std::cout << "can't open process current " << std::endl;
 	}
 
-	if (hToken != NULL)
-		CloseHandle(hToken);
-
 	return success;
 }
+
+#include <fstream>
+#include <tlhelp32.h>
 
 void printUsage()
 {
@@ -95,31 +87,8 @@ std::string getFullLibName()
 	return path + dllName;
 }
 
-using LoadFunc = decltype(LoadLibraryA);
-
-DWORD WINAPI RemoteFunc(LPVOID lpThreadParameter)
-{
-	char* str = (char*)lpThreadParameter;
-	auto loadFunc = (LoadFunc*)LoadLibraryAddr; //loadlibrary
-
-	auto handle = loadFunc(str);
-	if (handle == NULL)
-	{
-		return GetLastError();
-	}
-
-	return 0;
-}
-
 int main(int argc, char* argv[])
 {
-	auto virusSize = (char*)main - (char*)RemoteFunc;
-
-	auto LoadLibraryAddr = (LPVOID)GetProcAddress(GetModuleHandle(L"kernel32.dll"),
-		"LoadLibraryA");
-
-	std::cout << "addr of lib: " << LoadLibraryAddr << " sz:" << virusSize << std::endl;
-
 	if (argc < 3)
 	{
 		printUsage();
@@ -165,17 +134,26 @@ int main(int argc, char* argv[])
 		return -4;
 	}
 
-	auto hProcess = OpenProcess(PROCESS_CREATE_THREAD | PROCESS_VM_OPERATION | PROCESS_VM_READ |
+	HANDLE hProcess = OpenProcess(PROCESS_CREATE_THREAD | PROCESS_VM_OPERATION |
 		PROCESS_VM_WRITE | PROCESS_QUERY_INFORMATION, FALSE, pid);
 
-	if (hProcess == NULL)
+	if (hProcess == 0)
 	{
 		std::cout << "can't open the process " << GetLastError() << std::endl;
 		return -5;
 	}
 
-	LPVOID LLParam = (LPVOID)VirtualAllocEx(hProcess, NULL, 4192,
-		MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+	LPVOID LoadLibraryAddr = (LPVOID)GetProcAddress(GetModuleHandle(L"kernel32.dll"),
+		"LoadLibraryA");
+
+	if (LoadLibraryAddr == 0)
+	{
+		std::cout << "can't get address of loaddr" << std::endl;
+		return -6;
+	}
+
+	LPVOID LLParam = (LPVOID)VirtualAllocEx(hProcess, NULL, 256,
+		MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 
 	if (LLParam == 0)
 	{
@@ -183,22 +161,16 @@ int main(int argc, char* argv[])
 		return -7;
 	}
 
-	//SIZE_T written = 0;
-	//WriteProcessMemory(hProcess, LLParam, dllPath.data(), dllPath.size() + 1, &written);
-
-
 	SIZE_T written = 0;
-	WriteProcessMemory(hProcess, LLParam, RemoteFunc, virusSize, &written);
-	WriteProcessMemory(hProcess, ((char*)LLParam) + virusSize, dllPath.c_str(), dllPath.size(), &written);
+	WriteProcessMemory(hProcess, LLParam, dllPath.data(), dllPath.size() + 1, &written);
 
 	if (written == 0)
 	{
 		std::cout << "can't write to process memory" << std::endl;
 		return -8;
 	}
-	auto data = ((char*)LLParam) + virusSize;
-	auto handle = CreateRemoteThread(hProcess, NULL, NULL, (LPTHREAD_START_ROUTINE)LLParam,
-		data, NULL, NULL);
+	auto handle = CreateRemoteThread(hProcess, NULL, NULL, (LPTHREAD_START_ROUTINE)LoadLibraryAddr,
+		LLParam, NULL, NULL);
 	if (handle == 0)
 	{
 		std::cout << "cannot create remote thread " << GetLastError() << std::endl;
@@ -211,10 +183,11 @@ int main(int argc, char* argv[])
 		return -11;
 	}
 	// if everything is ok, code will be different from 0
-	if (exitCode != 0 && exitCode != STILL_ACTIVE)
+	if (exitCode == 0 && exitCode != STILL_ACTIVE)
 	{
-		const auto& exitCodeStr = std::to_string(exitCode);
-		MessageBoxA(0, exitCodeStr.c_str(), "After calling", 0);
+		char lastErr[10] = { 0 };
+		_itoa_s(exitCode, lastErr, 10);
+		MessageBoxA(0, lastErr, "", 0);
 		return -10;
 	}
 	CloseHandle(hProcess);
